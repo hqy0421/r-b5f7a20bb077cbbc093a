@@ -13,6 +13,7 @@ from singer_sdk import typing as th  # JSON Schema typing helpers
 from singer_sdk.pagination import JSONPathPaginator, OffsetPaginator
 
 from tap_jira.client import JiraStartAtPaginatedStream, JiraStream, ResumableAPIError
+from tap_jira.site import SITE_ID_KEY
 
 if sys.version_info >= (3, 12):
     from typing import override
@@ -206,6 +207,7 @@ class FieldStream(JiraStartAtPaginatedStream):
         return {
             "fieldId": record["id"],
             "supports_options": supports_options,
+            SITE_ID_KEY: self.site_id,
         }
 
 
@@ -257,6 +259,7 @@ class CustomFieldContextStream(JiraStartAtPaginatedStream):
         return {
             "fieldId": context["fieldId"],
             "contextId": record["id"],
+            SITE_ID_KEY: self.site_id,
         }
 
 
@@ -499,7 +502,7 @@ class ProjectStream(JiraStartAtPaginatedStream):
         record: Record,
         context: Context | None,
     ) -> dict[str, Any]:
-        return {"projectId": record["id"]}
+        return {"projectId": record["id"], SITE_ID_KEY: self.site_id}
 
 
 class ProjectVersionStream(JiraStartAtPaginatedStream):
@@ -1891,20 +1894,29 @@ class IssueStream(JiraStream[str]):
         return params
 
     @override
-    def post_process(self, row: Record, context: Context | None = None) -> Record:
+    def post_process(
+        self,
+        row: Record,
+        context: Context | None = None,
+    ) -> Record | None:
         """Post-process the record.
 
         - Add top-level `created` field.
+        - Stamp the stable site identity via the base class.
         """
         fields: dict[str, Any] = row["fields"]
         row["created"] = fields.pop("created")
         row["updated"] = fields.pop("updated")
-        return row
+        return super().post_process(row, context)
 
     @override
-    def get_child_context(self, record: Record, context: Context | None) -> Context:
+    def get_child_context(
+        self,
+        record: Record,
+        context: Context | None,
+    ) -> dict[str, Any]:
         """Return a context dictionary for child streams."""
-        return {"issue_id": record["id"]}
+        return {"issue_id": record["id"], SITE_ID_KEY: self.site_id}
 
 
 class PermissionStream(JiraStartAtPaginatedStream):
@@ -2541,9 +2553,13 @@ class BoardStream(JiraStartAtPaginatedStream):
         return f"https://{domain}/rest/agile/1.0"
 
     @override
-    def get_child_context(self, record: Record, context: Context | None) -> Context:
+    def get_child_context(
+        self,
+        record: Record,
+        context: Context | None,
+    ) -> dict[str, Any]:
         """Return a context dictionary for child streams."""
-        return {"board_id": record["id"]}
+        return {"board_id": record["id"], SITE_ID_KEY: self.site_id}
 
 
 class SprintStream(JiraStartAtPaginatedStream):
@@ -2603,7 +2619,7 @@ class SprintStream(JiraStartAtPaginatedStream):
         """Post-process the record before it is returned."""
         if context:
             row["boardId"] = context["board_id"]
-        return row
+        return super().post_process(row, context)
 
     @override
     def get_records(self, context: Context | None) -> Iterable[Record]:
@@ -3332,11 +3348,15 @@ class IssueWatchersStream(JiraStartAtPaginatedStream):
     ).to_dict()
 
     @override
-    def post_process(self, row: Record, context: Context | None = None) -> Record:
+    def post_process(
+        self,
+        row: Record,
+        context: Context | None = None,
+    ) -> Record | None:
         """Post-process the record before it is returned."""
         assert context is not None  # noqa: S101
         row["issueId"] = context["issue_id"]
-        return row
+        return super().post_process(row, context)
 
 
 class IssueChangeLogStream(JiraStartAtPaginatedStream):
@@ -3392,11 +3412,15 @@ class IssueChangeLogStream(JiraStartAtPaginatedStream):
     ).to_dict()
 
     @override
-    def post_process(self, row: Record, context: Context | None = None) -> Record:
+    def post_process(
+        self,
+        row: Record,
+        context: Context | None = None,
+    ) -> Record | None:
         """Post-process the record before it is returned."""
         assert context is not None  # noqa: S101
         row["issueId"] = context["issue_id"]
-        return row
+        return super().post_process(row, context)
 
 
 class IssueComments(JiraStartAtPaginatedStream):
@@ -3458,11 +3482,15 @@ class IssueComments(JiraStartAtPaginatedStream):
     ).to_dict()
 
     @override
-    def post_process(self, row: Record, context: Context | None = None) -> Record:
+    def post_process(
+        self,
+        row: Record,
+        context: Context | None = None,
+    ) -> Record | None:
         """Post-process the record before it is returned."""
         assert context is not None  # noqa: S101
         row["issueId"] = context["issue_id"]
-        return row
+        return super().post_process(row, context)
 
 
 class IssueWorklogs(JiraStartAtPaginatedStream):

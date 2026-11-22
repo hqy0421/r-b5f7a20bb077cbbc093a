@@ -9,6 +9,7 @@ from singer_sdk import Tap
 from singer_sdk import typing as th  # JSON schema typing helpers
 
 from tap_jira import streams
+from tap_jira.site import resolve_site_id
 
 if sys.version_info >= (3, 12):
     from typing import override
@@ -113,6 +114,24 @@ class TapJira(Tap):
             default=False,
         ),
     ).to_dict()
+
+    @property
+    def site_id(self) -> str:
+        """Stable identifier of the Jira site behind this tap configuration.
+
+        Multiple legitimate Jira instances can be loaded into the same
+        warehouse and may share native issue/project IDs. This value is
+        independent of access aliases (see :mod:`tap_jira.site`) and is used
+        as a record field, a composite primary-key component and a state
+        partition key so data and incremental state never collide across
+        sites.
+        """
+        return resolve_site_id(
+            cloud_id=self.config.get("cloud_id"),
+            domain=self.config["domain"],
+            email=self.config["email"],
+            api_token=self.config["api_token"],
+        )
 
     @override
     def discover_streams(self) -> Sequence[RESTStream[Any]]:
